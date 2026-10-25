@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>ピエロジャンプ！</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{
+margin:0;height:100%;overflow:hidden;
+font-family:sans-serif;
+touch-action:none;
+background:linear-gradient(#87ceeb,#eafcff);
+}
+.screen{
+width:100vw;height:100vh;
+display:none;flex-direction:column;
+justify-content:center;align-items:center;
+text-align:center;padding:20px;
+}
+.show{display:flex;}
+button{
+font-size:22px;
+padding:16px 28px;
+border:none;
+border-radius:14px;
+background:#ff7b00;
+color:#fff;
+min-width:220px;
+}
+#gameScreen{
+display:none;
+width:100vw;
+height:100vh;
+flex-direction:column;
+}
+#hud{
+display:flex;
+justify-content:space-between;
+padding:10px;
+font-size:22px;
+font-weight:bold;
+background:#fff;
+}
+#gameArea{
+position:relative;
+flex:1;
+overflow:hidden;
+background:linear-gradient(#bdefff,#fff);
+}
+#ground{
+position:absolute;
+left:0;
+bottom:0;
+width:100%;
+height:80px;
+background:#56b85f;
+}
+#clown{
+position:absolute;
+left:55px;
+bottom:80px;
+font-size:58px;
+z-index:5;
+}
+.item{
+position:absolute;
+font-size:42px;
+}
+.enemy{
+position:absolute;
+font-size:48px;
+}
+.invincible{
+filter:drop-shadow(0 0 10px gold);
+animation:flash .25s infinite;
+}
+@keyframes flash{
+50%{transform:scale(1.15);}
+}
+#power{
+position:absolute;
+top:10px;
+left:50%;
+transform:translateX(-50%);
+font-size:22px;
+font-weight:bold;
+color:#ff9800;
+display:none;
+z-index:10;
+}
+</style>
+</head>
+<body>
+
+<div id="startScreen" class="screen show">
+<h1>🤡 ピエロジャンプ！DX</h1>
+<p>
+タップでジャンプ！<br>
+🍰で得点アップ！<br>
+⭐で5秒間無敵！<br>
+👻🤖👾などの敵をよけよう！<br>
+無敵中は敵をふっとばして高得点！
+</p>
+<button id="startBtn">スタート</button>
+</div>
+
+<div id="gameScreen">
+<div id="hud">
+<div>スコア: <span id="score">0</span></div>
+<div>残り: <span id="time">30</span>秒</div>
+</div>
+
+<div id="gameArea">
+<div id="power">⭐ 無敵タイム！ ⭐</div>
+<div id="clown">🤡</div>
+<div id="ground"></div>
+</div>
+</div>
+
+<div id="resultScreen" class="screen">
+<h1>結果発表</h1>
+<h2>スコア: <span id="finalScore">0</span></h2>
+<h2>ランク: <span id="rank">C</span></h2>
+<button id="retryBtn">もう一度遊ぶ</button>
+</div>
+
+<script>
+const startScreen=document.getElementById("startScreen");
+const gameScreen=document.getElementById("gameScreen");
+const resultScreen=document.getElementById("resultScreen");
+const gameArea=document.getElementById("gameArea");
+const clown=document.getElementById("clown");
+
+const scoreEl=document.getElementById("score");
+const timeEl=document.getElementById("time");
+const finalScoreEl=document.getElementById("finalScore");
+const rankEl=document.getElementById("rank");
+const power=document.getElementById("power");
+
+let score=0;
+let timeLeft=30;
+let y=0;
+let vy=0;
+let jumping=false;
+let gameRunning=false;
+let objects=[];
+let spawnTimer;
+let timer;
+let loop;
+let invincible=false;
+let invTimer;
+
+function startGame(){
+
+objects.forEach(o=>o.el.remove());
+objects=[];
+
+score=0;
+timeLeft=30;
+y=0;
+vy=0;
+jumping=false;
+invincible=false;
+
+scoreEl.textContent=0;
+timeEl.textContent=30;
+
+clown.classList.remove("invincible");
+power.style.display="none";
+
+startScreen.classList.remove("show");
+resultScreen.classList.remove("show");
+gameScreen.style.display="flex";
+
+gameRunning=true;
+
+spawnTimer=setInterval(spawnObject,700);
+
+timer=setInterval(()=>{
+timeLeft--;
+timeEl.textContent=timeLeft;
+if(timeLeft<=0) endGame();
+},1000);
+
+gameLoop();
+}
+
+function jump(){
+if(!gameRunning) return;
+if(jumping) return;
+jumping=true;
+vy=17;
+}
+
+function activateStar(){
+invincible=true;
+clown.classList.add("invincible");
+power.style.display="block";
+
+clearTimeout(invTimer);
+
+invTimer=setTimeout(()=>{
+invincible=false;
+clown.classList.remove("invincible");
+power.style.display="none";
+},5000);
+}
+
+function spawnObject(){
+
+const el=document.createElement("div");
+
+const r=Math.random();
+
+let type="cake";
+
+if(r<0.12){
+type="star";
+el.textContent="⭐";
+el.className="item";
+}
+else if(r<0.45){
+type="enemy";
+const enemies=["👻","🤖","👾","🦇","👹"];
+el.textContent=enemies[Math.floor(Math.random()*enemies.length)];
+el.className="enemy";
+}
+else{
+type="cake";
+el.textContent="🍰";
+el.className="item";
+}
+
+const obj={
+type:type,
+el:el,
+x:gameArea.clientWidth+50
+};
+
+el.style.left=obj.x+"px";
+el.style.bottom="80px";
+
+gameArea.appendChild(el);
+objects.push(obj);
+}
+
+function hit(obj){
+
+if(obj.type==="cake"){
+score+=10;
+}
+
+if(obj.type==="star"){
+score+=20;
+activateStar();
+}
+
+if(obj.type==="enemy"){
+
+if(invincible){
+score+=25;
+}
+else{
+score=Math.max(0,score-15);
+}
+}
+
+scoreEl.textContent=score;
+}
+
+function gameLoop(){
+
+if(!gameRunning) return;
+
+vy-=0.8;
+y+=vy;
+
+if(y<=0){
+y=0;
+vy=0;
+jumping=false;
+}
+
+clown.style.bottom=(80+y)+"px";
+
+for(let i=objects.length-1;i>=0;i--){
+
+const o=objects[i];
+
+o.x-=6;
+
+o.el.style.left=o.x+"px";
+
+const hitbox=
+o.x<100 &&
+o.x+40>50 &&
+80<130+y &&
+120>80+y;
+
+if(hitbox){
+hit(o);
+o.el.remove();
+objects.splice(i,1);
+continue;
+}
+
+if(o.x<-80){
+o.el.remove();
+objects.splice(i,1);
+}
+}
+
+loop=requestAnimationFrame(gameLoop);
+}
+
+function endGame(){
+
+gameRunning=false;
+
+clearInterval(spawnTimer);
+clearInterval(timer);
+clearTimeout(invTimer);
+cancelAnimationFrame(loop);
+
+gameScreen.style.display="none";
+resultScreen.classList.add("show");
+
+finalScoreEl.textContent=score;
+
+let rank="C";
+
+if(score>=350) rank="S";
+else if(score>=220) rank="A";
+else if(score>=120) rank="B";
+
+rankEl.textContent=rank;
+}
+
+document.getElementById("startBtn").addEventListener("click",startGame);
+document.getElementById("retryBtn").addEventListener("click",startGame);
+
+gameArea.addEventListener("pointerdown",e=>{
+e.preventDefault();
+jump();
+});
+
+document.addEventListener("keydown",e=>{
+if(e.code==="Space"||e.code==="ArrowUp"){
+jump();
+}
+});
+</script>
+</body>
+</html>
